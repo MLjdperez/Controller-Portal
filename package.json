@@ -14,11 +14,13 @@
     "db:format": "prisma format",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "db:import:databook": "tsx --env-file-if-exists=.env scripts/import-databook.ts",
+    "db:verify:databook": "tsx --env-file-if-exists=.env scripts/verify-databook.ts"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx --env-file-if-exists=.env prisma/seed.ts"
   },
   "engines": {
     "node": ">=20"

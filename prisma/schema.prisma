@@ -347,8 +347,12 @@ model SourceAccount {
   accountType      String?
   /// Databook L3: the finest group label, kept for drill-down.
   groupLabel       String?
-  /// Set when the Databook IC column names a counterparty.
+  /// Databook "IC" flag on an entity tab.
+  isIntercompany   Boolean   @default(false)
+  /// Set when the Databook IC column names a counterparty (the Elim tab does).
   icCounterpartyId String?
+  /// Elim tab reference letters (a, d, e, …) of the lines rolled into this account. Phase 2 turns them into rules.
+  eliminationRefs  String[]
   isActive         Boolean   @default(true)
   createdAt        DateTime  @default(now())
 

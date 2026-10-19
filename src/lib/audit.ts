@@ -1,20 +1,11 @@
 import 'server-only';
-import type { AuditAction, Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { db } from './db';
+import { audit as write, type AuditEntry } from './audit-core';
 
-export type AuditEntry = {
-  userId?: string | null;
-  action: AuditAction;
-  objectType: string;
-  objectId?: string | null;
-  entityId?: string | null;
-  summary: string;
-  before?: Prisma.InputJsonValue;
-  after?: Prisma.InputJsonValue;
-  ipAddress?: string | null;
-};
+export type { AuditEntry };
 
 /** Append one audit row. Pass `tx` inside a transaction so the record and its audit commit together. */
 export function audit(entry: AuditEntry, tx: Prisma.TransactionClient = db) {
-  return tx.auditLog.create({ data: entry });
+  return write(tx, entry);
 }

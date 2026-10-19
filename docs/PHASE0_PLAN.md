@@ -137,8 +137,10 @@ Each item is one or more commits, each testable on its own. ✱ marks an essenti
 
 Later enhancements (not Phase 1): QuickBooks API, Sage activity import, cash flow, NIO translation engine, JE engine (Phase 2 start).
 
-**Status 2026-10-19:** items 1–5 are built, and unit tests, the typecheck and `next build` pass. The migration and
-seed haven't been run against a database yet (there's no local Postgres on the dev machine). Items 6–12 are not started.
+**Status 2026-10-19:** items 1–7 are done. The migration and seed run on local Postgres 16 (Docker). The seed is idempotent, and the DB
+controls were probed: the audit log rejects UPDATE and DELETE, and the ownership range is enforced. The Databook import is idempotent (a re-import is a DUPLICATE batch).
+**Acceptance passed:** statements read from the database tie to the cent on 1,728 Databook figures. Details and findings
+for the Controller: `docs/private/DATABOOK_FINDINGS.md` (local only: contains financial figures). Items 8–12 are not started.
 
 Databook findings (read-only inspection of the 2026-10-14 "Post Audit" copy):
 - The entity tabs share one column layout. The Elim tab has an extra `Ref` column (col H), and its `IC` column holds the counterparty entity name.

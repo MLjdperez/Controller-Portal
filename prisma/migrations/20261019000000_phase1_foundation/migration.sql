@@ -233,7 +233,9 @@ CREATE TABLE "SourceAccount" (
     "bsType" TEXT,
     "accountType" TEXT,
     "groupLabel" TEXT,
+    "isIntercompany" BOOLEAN NOT NULL DEFAULT false,
     "icCounterpartyId" TEXT,
+    "eliminationRefs" TEXT[],
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -551,7 +553,7 @@ ALTER TABLE "TbLine" ADD CONSTRAINT "TbLine_sourceAccountId_fkey" FOREIGN KEY ("
 ALTER TABLE "ExchangeRate" ADD CONSTRAINT "ExchangeRate_periodId_fkey" FOREIGN KEY ("periodId") REFERENCES "AccountingPeriod"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 
--- ─────────────── Hand-written controls (not expressible in Prisma) ───────────────
+-- -- ─────────────── Hand-written controls (not expressible in Prisma) ───────────────
 
 -- The audit log is append-only. Corrections are new rows, never edits.
 CREATE OR REPLACE FUNCTION audit_log_append_only() RETURNS trigger AS $$

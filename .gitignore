@@ -21,3 +21,6 @@ Thumbs.db
 
 # Initial passwords written by the seed. Distribute, then delete.
 credentials.local.csv
+
+# Analyses that contain real financial figures stay on this machine.
+/docs/private/

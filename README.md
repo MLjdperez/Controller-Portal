@@ -9,14 +9,24 @@ Bilingual (EN/ES), with server-enforced roles and an append-only audit trail.
 
 ## Status
 
-Phase 1, slice 1. Built: scaffold, core schema with its first migration, seed, auth/scopes/audit, money library, and the EN/ES shell with the TB-status dashboard.
-Next: the Databook importer and the statement engine (backlog items 6–7).
+Phase 1, backlog items 1–7. Built: scaffold, schema with its migration, seed, auth/scopes/audit, money library, EN/ES shell,
+**Databook importer and statement engine**. Acceptance passed: portal statements tie to the Databook to the cent
+(`docs/private/DATABOOK_FINDINGS.md` (local only: contains financial figures)).
+Next: statements UI with drill-down, generic TB upload, approvals (items 8–11).
 
 ## Stack
 
 Next.js 15 + TypeScript · PostgreSQL + Prisma 6 · decimal.js for money · Vitest · Railway.
 
 ## Run locally
+
+Local Postgres (Docker), on port 5433 so it never collides with another project's database:
+
+```bash
+docker run -d --name controller-portal-db -e POSTGRES_USER=portal -e POSTGRES_PASSWORD=portal_dev_only -e POSTGRES_DB=controller_portal -p 127.0.0.1:5433:5432 -v controller-portal-pgdata:/var/lib/postgresql/data postgres:16
+```
+
+Then:
 
 ```bash
 npm install
@@ -32,6 +42,14 @@ Distribute it, then delete the file.
 ```bash
 npm test                    # accounting and access-control unit tests
 npm run typecheck
+```
+
+Load the Databook and check the portal against it:
+
+```bash
+npm run db:import:databook -- "<path>.xlsx" --through 2026-09 --as <controller email>
+npm run db:verify:databook -- "<path>.xlsx"
+DATABOOK_PATH="<path>.xlsx" npm test   # also runs the acceptance suite (skipped without the file)
 ```
 
 ## Data handling
