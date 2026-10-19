@@ -50,7 +50,8 @@ export function computeStatements(
     const row = new Map<string, Decimal>();
     for (const e of entities) {
       let v: Decimal;
-      if (line.kind === 'SUBTOTAL') v = sum((line.sumOf ?? []).map(c => get(c, e)));
+      if (line.kind === 'SUBTOTAL')
+        v = sum((line.sumOf ?? []).map(c => (c.startsWith('-') ? get(c.slice(1), e).negated() : get(c, e))));
       else if (line.computed === 'PL_NET_INCOME') v = get('PL.NET_INCOME', e);
       else v = detail.get(line.code)?.get(e) ?? ZERO;
       row.set(e, v);

@@ -71,6 +71,8 @@ export const en = {
     noLines: 'No accounts feed this line for the selection.',
     nameSource: 'Name in source ledger',
     portalCode: 'Portal-assigned code: no account number in the source',
+    download: 'Download Excel',
+    ebitdaDefinition: 'EBITDA definition',
   },
   mappingStatus: { PROPOSED: 'Proposed', APPROVED: 'Approved', REJECTED: 'Rejected' } satisfies Record<MappingStatus, string>,
 };

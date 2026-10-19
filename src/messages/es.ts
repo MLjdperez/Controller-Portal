@@ -70,6 +70,8 @@ export const es: Messages = {
     noLines: 'Ninguna cuenta alimenta este rubro para la selección.',
     nameSource: 'Nombre en el libro fuente',
     portalCode: 'Código asignado por el portal: la fuente no tiene número de cuenta',
+    download: 'Descargar Excel',
+    ebitdaDefinition: 'Definición de EBITDA',
   },
   mappingStatus: { PROPOSED: 'Propuesto', APPROVED: 'Aprobado', REJECTED: 'Rechazado' },
 };

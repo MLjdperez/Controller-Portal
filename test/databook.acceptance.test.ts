@@ -11,6 +11,7 @@ import { balancesFromParsed, compareToBaseline } from '@/lib/databook/compare';
 import { computeStatements, CONSOLIDATED } from '@/lib/statements/engine';
 import { cents } from '@/lib/money';
 import { checkOpenings } from '@/lib/databook/openings';
+import { KNOWN_DATABOOK_ERRORS, knownErrorKey } from '@/lib/databook/known-errors';
 
 const path = process.env.DATABOOK_PATH;
 const ENTITIES = ['MLB', 'MLF', 'MLL', 'GSA', 'LSA', 'ELIM'];
@@ -40,11 +41,18 @@ describe.skipIf(!path)('Databook acceptance', () => {
     for (const e of ENTITIES) expect(baseline.some(b => b.entity === e && b.period === '2025-12')).toBe(true);
   });
 
-  it('reproduces the Databook statements to the cent', () => {
+  it('compares EBITDA to the Databook "EBITDA, reported" (MLF monthly, every entity at YE)', () => {
+    const e = baseline.filter(b => b.lineCode === 'PL.EBITDA');
+    expect(e.some(b => b.entity === 'MLF' && b.period === '2026-09')).toBe(true);
+    expect(e.filter(b => b.period === '2025-12').map(b => b.entity).sort()).toEqual([...ENTITIES].sort().concat('MLF').sort());
+  });
+
+  it('reproduces the Databook statements to the cent, except its known formula errors', () => {
     const { compared, differences } = compareToBaseline(baseline, p => balancesFromParsed(parsed, p), ENTITIES);
     expect(compared).toBeGreaterThan(1000);
-    expect(differences.map(d => `${d.source} ${d.entity} ${d.period} ${d.lineCode}: portal ${cents(d.portal)} vs ${cents(d.value)}`))
-      .toEqual([]);
+    // Only the Databook's own traced formula errors may differ, and exactly by their recorded amounts.
+    expect(differences.map(d => knownErrorKey({ ...d, diff: cents(d.diff) })))
+      .toEqual(KNOWN_DATABOOK_ERRORS.map(knownErrorKey));
   });
 
   it('reports every opening balance that does not roll forward (printed for the Controller)', () => {

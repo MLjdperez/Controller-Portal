@@ -10,16 +10,19 @@ export type LineDef = {
   nameEn: string;
   nameEs: string;
   kind: LineKind;
-  /** SUBTOTAL only: codes of the lines it sums. */
+  /** SUBTOTAL only: codes of the lines it sums. A leading "-" subtracts that line. */
   sumOf?: string[];
   /** DETAIL lines fed by something other than mapped accounts. */
   computed?: 'PL_NET_INCOME';
+  /** Non-GAAP memo line: shown below the statement, never part of it. */
+  memo?: true;
 };
 
 const d = (statement: Statement, code: string, nameEn: string, nameEs: string, computed?: LineDef['computed']): LineDef =>
   ({ code: `${statement}.${code}`, statement, nameEn, nameEs, kind: 'DETAIL', ...(computed ? { computed } : {}) });
+const qualify = (statement: Statement, c: string) => (c.startsWith('-') ? `-${statement}.${c.slice(1)}` : `${statement}.${c}`);
 const s = (statement: Statement, code: string, nameEn: string, nameEs: string, sumOf: string[]): LineDef =>
-  ({ code: `${statement}.${code}`, statement, nameEn, nameEs, kind: 'SUBTOTAL', sumOf: sumOf.map(c => `${statement}.${c}`) });
+  ({ code: `${statement}.${code}`, statement, nameEn, nameEs, kind: 'SUBTOTAL', sumOf: sumOf.map(c => qualify(statement, c)) });
 
 export const BS_LINES: LineDef[] = [
   d('BS', 'CASH', 'Cash and cash equivalents', 'Efectivo y equivalentes'),
@@ -102,7 +105,29 @@ export const PL_LINES: LineDef[] = [
   s('PL', 'NET_INCOME', 'Net income', 'Utilidad neta', ['OPERATING_PROFIT', 'NON_OPERATING']),
 ];
 
-export const ALL_LINES: LineDef[] = [...BS_LINES, ...PL_LINES];
+/**
+ * EBITDA as the Databook reports it ("EBITDA, reported", PL tab rows 52–57): net income with interest,
+ * both tax lines and the "Depreciation expense" line added back. That line carries amortization of goodwill and
+ * tradename too (60510–60512 map to it), so this is EBITDA, not EBITA.
+ * Master prompt §8: no single EBITDA definition is assumed. This one is the reported definition; management,
+ * due-diligence and pro forma adjustments (rows 61–64, empty today) would be further add-backs listed here.
+ */
+export const EBITDA_DEFINITION = {
+  code: 'PL.EBITDA',
+  base: 'PL.NET_INCOME',
+  addBacks: ['PL.INTEREST', 'PL.INCOME_TAX', 'PL.TAX_EXPENSE', 'PL.DEPRECIATION'],
+  revenue: 'PL.NET_REVENUE',
+  sourceEn: 'Net income + interest + income tax + tax expense/income + depreciation & amortization (Databook "EBITDA, reported")',
+  sourceEs: 'Utilidad neta + intereses + impuesto sobre la renta + gasto por impuestos + depreciación y amortización (Databook "EBITDA, reported")',
+} as const;
+
+export const PL_MEMO_LINES: LineDef[] = [{
+  ...s('PL', 'EBITDA', 'EBITDA, reported', 'EBITDA reportado',
+    ['NET_INCOME', ...EBITDA_DEFINITION.addBacks.map(c => `-${c.slice(3)}`)]),
+  memo: true,
+}];
+
+export const ALL_LINES: LineDef[] = [...BS_LINES, ...PL_LINES, ...PL_MEMO_LINES];
 
 /** Excel's SUMIF matches text case-insensitively; the Databook relies on it ("Accounts Payable" = "Accounts payable"). */
 export const normalizeLabel = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();

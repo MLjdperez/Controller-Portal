@@ -10,6 +10,7 @@ import { loadStatementInputs } from '../src/lib/statements/load';
 import { computeStatements, CONSOLIDATED } from '../src/lib/statements/engine';
 import type { MappedBalance } from '../src/lib/statements/engine';
 import { cents } from '../src/lib/money';
+import { KNOWN_DATABOOK_ERRORS, knownErrorKey } from '../src/lib/databook/known-errors';
 
 const ENTITIES = ['MLB', 'MLF', 'MLL', 'GSA', 'LSA', 'ELIM'];
 
@@ -38,8 +39,13 @@ async function main() {
     if (notLoaded.length) console.log(`Not loaded, not compared: ${notLoaded.join(', ')}`);
     console.log(`Compared ${compared} Databook figures (${[...cache.keys()].length} periods) against statements read from the database.`);
     for (const s of status) console.log(`  input gap ${s}`);
-    for (const d of differences)
-      console.log(`  DIFF ${d.source} ${d.entity} ${d.period} ${d.lineCode}: portal ${cents(d.portal)} databook ${cents(d.value)} (${cents(d.diff)})`);
+    const known = new Map(KNOWN_DATABOOK_ERRORS.map(k => [knownErrorKey(k), k.why]));
+    const unexplained = differences.filter(d => !known.has(knownErrorKey({ ...d, diff: cents(d.diff) })));
+    for (const d of differences) {
+      const why = known.get(knownErrorKey({ ...d, diff: cents(d.diff) }));
+      console.log(`  ${why ? 'KNOWN DATABOOK ERROR' : 'DIFF'} ${d.source} ${d.entity} ${d.period} ${d.lineCode}: ` +
+        `portal ${cents(d.portal)} databook ${cents(d.value)} (${cents(d.diff)})${why ? ` — ${why}` : ''}`);
+    }
 
     const sep = await loadStatementInputs(db, { periodKey: '2026-09', entityCodes: ENTITIES, basis: 'LATEST' });
     const st = computeStatements(sep.balances, ENTITIES);
@@ -51,8 +57,10 @@ async function main() {
       console.log(`${code.padEnd(26)}${[...ENTITIES, CONSOLIDATED].map(e => cents(st.amounts.get(code)!.get(e)!).padStart(16)).join('')}`);
     console.log(`${'BS out of balance'.padEnd(26)}${[...ENTITIES, CONSOLIDATED].map(e => cents(st.checks.bsDifference.get(e)!).padStart(16)).join('')}`);
 
-    console.log(differences.length ? `\nFAILED: ${differences.length} differences` : '\nPASSED: every compared figure ties to the cent');
-    if (differences.length) process.exitCode = 1;
+    console.log(unexplained.length
+      ? `\nFAILED: ${unexplained.length} unexplained differences`
+      : `\nPASSED: every compared figure ties to the cent${differences.length ? ` apart from ${differences.length} known Databook formula errors` : ''}`);
+    if (unexplained.length) process.exitCode = 1;
   } finally {
     await db.$disconnect();
   }

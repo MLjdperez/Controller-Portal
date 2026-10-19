@@ -1,12 +1,15 @@
 import { requirePermission } from '@/lib/auth';
 import { formatMoney, messages } from '@/lib/i18n';
-import { ZERO } from '@/lib/money';
-import { BS_LINES, PL_LINES } from '@/lib/statements/layout';
-import { monthFromYtd, present } from '@/lib/statements/present';
-import { CONSOLIDATED, resolvePeriod, statementData, visibleEntities } from './data';
+import { EBITDA_DEFINITION } from '@/lib/statements/layout';
+import type { ViewRow } from '@/lib/statements/view';
+import { CONSOLIDATED, preliminaryReasons, resolvePeriod, statementView } from './data';
 import { parseParams, query, type RawParams } from './params';
 
 export const dynamic = 'force-dynamic';
+
+const ROW_CLASS: Record<ViewRow['kind'], string> = {
+  DETAIL: '', SUBTOTAL: 'subtotal', MEMO_HEADER: 'memo-header', MEMO: 'memo', MEMO_TOTAL: 'subtotal memo', RATIO: 'memo ratio', CHECK: 'check',
+};
 
 export default async function StatementsPage({ searchParams }: { searchParams: Promise<RawParams> }) {
   const s = await requirePermission('VIEW_STATEMENTS');
@@ -17,28 +20,26 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   if (!period) return <p className="muted">{t.dashboard.noData}</p>;
   const params = { ...p, period: period.key };
 
-  const { codes, canConsolidate } = await visibleEntities(s);
-  const data = await statementData(params, period.key, codes);
-  const columns = canConsolidate ? [...codes, CONSOLIDATED] : codes;
-  const lines = p.stmt === 'BS' ? BS_LINES : PL_LINES;
-  const monthView = p.stmt === 'PL' && p.view === 'month';
-
-  const value = (code: string, col: string) => {
-    const ytd = data.result.amounts.get(code)?.get(col) ?? ZERO;
-    const v = monthView ? monthFromYtd(ytd, data.prior?.amounts.get(code)?.get(col) ?? null, data.isFirstMonth) : ytd;
-    return present(code, v, p.signs);
-  };
-
-  const reasons: string[] = [];
-  for (const e of data.inputs.entities) {
-    if (!e.submission) reasons.push(ts.missingTb(e.entity));
-    else if (e.submission.status !== 'APPROVED' || e.unapprovedMappings)
-      reasons.push(ts.unapproved(e.entity, t.submissionStatus[e.submission.status], e.submission.version, e.unapprovedMappings));
-    if (e.unmappedAccounts.length) reasons.push(ts.unmapped(e.entity, e.unmappedAccounts.length));
-  }
+  const { columns, canConsolidate, monthView, data, rows } = await statementView(s, params, period.key);
+  const reasons = preliminaryReasons(data.inputs, t);
+  const pct = new Intl.NumberFormat(s.locale === 'es' ? 'es-US' : 'en-US', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   const tab = (label: string, extra: Record<string, string>, active: boolean) =>
     <a href={`/statements?${query(params, extra)}`} className={`tab${active ? ' active' : ''}`}>{label}</a>;
+
+  const cell = (r: ViewRow, i: number, col: string) => {
+    const v = r.values[i] ?? null;
+    if (r.kind === 'MEMO_HEADER') return <td key={col} />;
+    if (r.kind === 'RATIO') return <td key={col} className="num">{v === null ? '–' : pct.format(v.toNumber())}</td>;
+    if (r.kind === 'CHECK')
+      return <td key={col} className={`num${v && v.abs().gte('0.005') ? ' bad' : ''}`}>{formatMoney(v ?? 0, s.locale, 2)}</td>;
+    const text = !v || v.isZero() ? '–' : formatMoney(v, s.locale);
+    return (
+      <td key={col} className="num">
+        {r.lineCode ? <a href={`/statements/line?${query(params, { line: r.lineCode, entity: col })}`}>{text}</a> : text}
+      </td>
+    );
+  };
 
   return (
     <>
@@ -47,8 +48,11 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
           <h2 style={{ margin: 0, fontSize: 20 }}>{ts.title}</h2>
           <p className="muted" style={{ margin: '4px 0 0' }}>{ts.ytdNote}</p>
         </div>
-        <span className={`pill ${data.inputs.isFinal ? 'final' : 'preliminary'}`} title={ts.preliminaryWhy}>
-          {data.inputs.isFinal ? ts.final : ts.preliminary}
+        <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <a className="button" href={`/statements/export?${query(params)}`} download>{ts.download}</a>
+          <span className={`pill ${data.inputs.isFinal ? 'final' : 'preliminary'}`} title={ts.preliminaryWhy}>
+            {data.inputs.isFinal ? ts.final : ts.preliminary}
+          </span>
         </span>
       </div>
 
@@ -104,33 +108,20 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             </tr>
           </thead>
           <tbody>
-            {lines.map(l => (
-              <tr key={l.code} className={l.kind === 'SUBTOTAL' ? 'subtotal' : ''}>
-                <td>{s.locale === 'es' ? l.nameEs : l.nameEn}</td>
-                {columns.map(c => {
-                  const v = value(l.code, c);
-                  return (
-                    <td key={c} className="num">
-                      <a href={`/statements/line?${query(params, { line: l.code, entity: c })}`}>
-                        {v.isZero() ? '–' : formatMoney(v, s.locale)}
-                      </a>
-                    </td>
-                  );
-                })}
+            {rows.map(r => (
+              <tr key={r.key} className={ROW_CLASS[r.kind]}>
+                <td colSpan={r.kind === 'MEMO_HEADER' ? 1 : undefined}>{r.label}</td>
+                {columns.map((c, i) => cell(r, i, c))}
               </tr>
             ))}
-            {p.stmt === 'BS' && (
-              <tr className="check">
-                <td>{ts.outOfBalance}</td>
-                {columns.map(c => {
-                  const d = data.result.checks.bsDifference.get(c) ?? ZERO;
-                  return <td key={c} className={`num${d.abs().gte('0.005') ? ' bad' : ''}`}>{formatMoney(d, s.locale, 2)}</td>;
-                })}
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
+      {p.stmt === 'PL' && (
+        <p className="muted" style={{ fontSize: 13 }}>
+          {ts.ebitdaDefinition}: {s.locale === 'es' ? EBITDA_DEFINITION.sourceEs : EBITDA_DEFINITION.sourceEn}.
+        </p>
+      )}
       <p className="muted" style={{ fontSize: 13 }}>{ts.drillHint}</p>
     </>
   );

@@ -46,7 +46,7 @@ const isSumIf = (f: string | null) => !!f && /SUMIFS?\(/i.test(f);
  * income as positive (subtotal = −raw); every other tab shows raw signs. Scale follows the column's detail cells.
  */
 /** PL (YE) flips revenue rows only, so its income subtotals display flipped while cost subtotals stay raw. */
-const PL_YE_FLIPPED = new Set(['PL.NET_REVENUE', 'PL.GROSS_PROFIT', 'PL.OPERATING_PROFIT', 'PL.NET_INCOME']);
+const PL_YE_FLIPPED = new Set(['PL.NET_REVENUE', 'PL.GROSS_PROFIT', 'PL.OPERATING_PROFIT', 'PL.NET_INCOME', 'PL.EBITDA']);
 
 function readColumn(ws: Worksheet, statement: Statement, col: number, firstRow: number, lastRow: number, flipIncome: boolean) {
   let scale: Decimal | null = null;
@@ -56,7 +56,8 @@ function readColumn(ws: Worksheet, statement: Statement, col: number, firstRow: 
     const name = ws.getRow(r).getCell(2).value;
     if (typeof name !== 'string') continue;
     const code = lineCode(statement, name);
-    if (!code) continue; // ratios, checks and memo rows
+    // ratios and checks; and the EBITDA reconciliation repeats "Tax Expense / Income": the first row wins
+    if (!code || out.has(code) || subtotals.some(([c]) => c === code)) continue;
     const cell = ws.getRow(r).getCell(col);
     const n = readNumber(cell);
     if ('error' in n) continue;
@@ -98,7 +99,7 @@ export function readBaseline(wb: Workbook): BaselineValue[] {
       // The BS tab's Dec-24 column reads the BB (2025 opening, post-closing) column, not Dec '24.
       // That is an opening balance, checked by checkOpenings(), not a period-end statement.
       if (!period || period === '2024-12') return;
-      for (const [code, value] of readColumn(ws, statement, col, 9, 50, false))
+      for (const [code, value] of readColumn(ws, statement, col, 9, 60, false))
         out.push({ source: tab, entity, period, lineCode: code, value });
     });
   }
@@ -112,7 +113,7 @@ export function readBaseline(wb: Workbook): BaselineValue[] {
       if (col > 10) return; // the second block is the Crowe (Dec-24 audited) comparison
       const entity = typeof cell.value === 'string' ? yeCols[cell.value.trim()] : undefined;
       if (!entity) return;
-      for (const [code, value] of readColumn(ws, statement, col, 9, 50, statement === 'PL'))
+      for (const [code, value] of readColumn(ws, statement, col, 9, 60, statement === 'PL'))
         out.push({ source: tab, entity, period: '2025-12', lineCode: code, value });
     });
   }

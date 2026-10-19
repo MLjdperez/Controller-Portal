@@ -3,7 +3,7 @@
 // assets and expenses as debits, liabilities, equity and income as credits, each positive when "normal".
 
 import { Decimal, ZERO } from '../money';
-import { BS_LINES, PL_LINES, ALL_LINES, type LineDef } from './layout';
+import { BS_LINES, PL_LINES, PL_MEMO_LINES, ALL_LINES, type LineDef } from './layout';
 
 export type SignMode = 'natural' | 'raw';
 
@@ -13,6 +13,7 @@ const CREDIT_NORMAL = new Set([
   // PL: income is credit-normal. Showing the whole PL from the income side makes revenue and
   // profit positive and costs negative, which reads top to bottom: revenue − costs = profit.
   ...PL_LINES.map(l => l.code),
+  ...PL_MEMO_LINES.map(l => l.code),
 ]);
 
 /** Multiplier from stored (debit − credit) to displayed value. */
@@ -38,7 +39,10 @@ export function detailLinesOf(code: string, lines: readonly LineDef[] = ALL_LINE
   const line = lines.find(l => l.code === code);
   if (!line) return [];
   if (line.kind === 'DETAIL') return line.computed === 'PL_NET_INCOME' ? detailLinesOf('PL.NET_INCOME', lines) : [code];
-  return (line.sumOf ?? []).flatMap(c => detailLinesOf(c, lines));
+  // A subtracted part (EBITDA's add-backs) removes those detail lines from the drill.
+  const plus = (line.sumOf ?? []).filter(c => !c.startsWith('-')).flatMap(c => detailLinesOf(c, lines));
+  const minus = new Set((line.sumOf ?? []).filter(c => c.startsWith('-')).flatMap(c => detailLinesOf(c.slice(1), lines)));
+  return plus.filter(c => !minus.has(c));
 }
 
 export function previousPeriodKey(key: string): string {

@@ -5,6 +5,8 @@ import { ENTITIES } from '@/lib/reference';
 import { computeStatements, CONSOLIDATED, type StatementResult } from '@/lib/statements/engine';
 import { loadStatementInputs, type StatementInputs } from '@/lib/statements/load';
 import { previousPeriodKey } from '@/lib/statements/present';
+import { buildView } from '@/lib/statements/view';
+import type { Messages } from '@/messages/en';
 import type { StatementParams } from './params';
 
 /** Entity codes the user may see, in group order, and whether the consolidated column may be shown. */
@@ -49,6 +51,29 @@ export async function statementData(p: StatementParams, periodKey: string, entit
     } else priorMissing = true;
   }
   return { inputs, result, prior, priorMissing, isFirstMonth };
+}
+
+/** Why the statement isn't final, in the user's language. */
+export function preliminaryReasons(inputs: StatementInputs, t: Messages): string[] {
+  const reasons: string[] = [];
+  for (const e of inputs.entities) {
+    if (!e.submission) reasons.push(t.statements.missingTb(e.entity));
+    else if (e.submission.status !== 'APPROVED' || e.unapprovedMappings)
+      reasons.push(t.statements.unapproved(e.entity, t.submissionStatus[e.submission.status], e.submission.version, e.unapprovedMappings));
+    if (e.unmappedAccounts.length) reasons.push(t.statements.unmapped(e.entity, e.unmappedAccounts.length));
+  }
+  return reasons;
+}
+
+/** Everything the screen and the download show, built once. */
+export async function statementView(s: SessionUser, p: StatementParams, periodKey: string) {
+  const { codes, canConsolidate } = await visibleEntities(s);
+  const data = await statementData(p, periodKey, codes);
+  const columns = canConsolidate ? [...codes, CONSOLIDATED] : codes;
+  const monthView = p.stmt === 'PL' && p.view === 'month';
+  const rows = buildView({ stmt: p.stmt, monthView, signs: p.signs, locale: s.locale, columns,
+    result: data.result, prior: data.prior, isFirstMonth: data.isFirstMonth });
+  return { columns, canConsolidate, monthView, data, rows };
 }
 
 export { CONSOLIDATED };
