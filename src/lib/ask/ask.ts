@@ -54,6 +54,7 @@ export async function ask(db: PrismaClient, args: {
   let outcome: AskResult = { ok: false, error: 'TOO_MANY_STEPS' };
   let usage = { input: 0, output: 0, cacheRead: 0 };
   let model = ASK_MODEL;
+  let apiError: { status: number | null; message: string } | null = null;
 
   try {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
@@ -95,13 +96,17 @@ export async function ask(db: PrismaClient, args: {
     }
   } catch (e) {
     outcome = { ok: false, error: e instanceof Anthropic.RateLimitError ? 'RATE_LIMITED' : 'API_ERROR' };
-    if (!(e instanceof Anthropic.APIError)) console.error('ask failed', e);
+    // Status and message only: the SDK never puts the API key in either.
+    apiError = e instanceof Anthropic.APIError
+      ? { status: e.status ?? null, message: e.message.slice(0, 500) }
+      : { status: null, message: e instanceof Error ? e.message.slice(0, 500) : 'unknown' };
+    console.error('Ask Claude failed:', apiError);
   }
 
   await audit(db, {
     userId: args.userId, action: 'AI_QUERY', objectType: 'AskClaude',
     summary: `Asked Claude (${model}): ${question.slice(0, 200)}${question.length > 200 ? '…' : ''} → ${outcome.ok ? 'answered' : outcome.error}`,
-    after: { question, outcome: outcome.ok ? 'ANSWERED' : outcome.error, model, tools: toolLog, usage,
+    after: { question, outcome: outcome.ok ? 'ANSWERED' : outcome.error, model, tools: toolLog, usage, apiError,
       sentToAnthropic: 'question plus tool results (statement lines, account balances) for the entities in scope' } as never,
   });
   return outcome;
