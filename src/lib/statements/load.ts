@@ -1,7 +1,8 @@
 // Statement inputs from the database: the TB submission in force per entity, through the mapping in force.
 // Says exactly what is missing, unmapped or unapproved, so nothing is shown as final that isn't.
+// Keeps account-level detail so every statement figure drills down to the TB lines behind it.
 
-import type { PrismaClient, SubmissionStatus } from '@prisma/client';
+import type { MappingStatus, PrismaClient, SubmissionStatus } from '@prisma/client';
 import type { MappedBalance } from './engine';
 
 export type Basis = 'APPROVED' | 'LATEST';
@@ -13,9 +14,24 @@ export type EntityInput = {
   unapprovedMappings: number;
 };
 
+/** One TB line as it feeds the statements. */
+export type DetailLine = {
+  entity: string;
+  lineCode: string;
+  stdAccountCode: string;
+  stdAccountName: string;
+  sourceAccountId: string;
+  accountCode: string;
+  accountName: string;
+  balance: string;
+  mappingStatus: MappingStatus;
+  submissionId: string;
+};
+
 export type StatementInputs = {
   period: string;
   balances: MappedBalance[];
+  details: DetailLine[];
   entities: EntityInput[];
   /** True only when every entity has an approved TB and every line uses an approved mapping. */
   isFinal: boolean;
@@ -32,6 +48,7 @@ export async function loadStatementInputs(db: PrismaClient, args: {
   const entities = await db.entity.findMany({ where: { code: { in: args.entityCodes } }, orderBy: { sortOrder: 'asc' } });
 
   const balances: MappedBalance[] = [];
+  const details: DetailLine[] = [];
   const out: EntityInput[] = [];
   let isFinal = true;
 
@@ -61,10 +78,18 @@ export async function loadStatementInputs(db: PrismaClient, args: {
       const m = line.sourceAccount.mappings[0];
       if (!m) { info.unmappedAccounts.push(line.sourceAccount.code); continue; }
       if (m.status !== 'APPROVED') info.unapprovedMappings++;
-      balances.push({ entity: e.code, lineCode: m.stdAccount.statementLine.code, balance: line.reportingBalance.toString() });
+      const balance = line.reportingBalance.toString();
+      balances.push({ entity: e.code, lineCode: m.stdAccount.statementLine.code, balance });
+      details.push({
+        entity: e.code, lineCode: m.stdAccount.statementLine.code,
+        stdAccountCode: m.stdAccount.code, stdAccountName: m.stdAccount.nameEn,
+        sourceAccountId: line.sourceAccountId, accountCode: line.sourceAccount.code,
+        accountName: line.sourceAccount.nameEn ?? line.sourceAccount.nameSource,
+        balance, mappingStatus: m.status, submissionId: submission!.id,
+      });
     }
     if (info.unmappedAccounts.length || info.unapprovedMappings) isFinal = false;
     out.push(info);
   }
-  return { period: period.key, balances, entities: out, isFinal };
+  return { period: period.key, balances, details, entities: out, isFinal };
 }

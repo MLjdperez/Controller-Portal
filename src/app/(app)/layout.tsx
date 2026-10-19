@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 // Master prompt §23. Sections not built yet are shown disabled, labelled with their phase.
 const NAV = [
   { key: 'dashboard', href: '/', phase: 1 },
-  { key: 'statements', phase: 1 },
+  { key: 'statements', href: '/statements', phase: 1 },
   { key: 'trialBalances', phase: 1 },
   { key: 'consolidation', phase: 2 },
   { key: 'journalEntries', phase: 2 },

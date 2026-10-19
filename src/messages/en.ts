@@ -1,4 +1,4 @@
-import type { PeriodStatus, SubmissionStatus } from '@prisma/client';
+import type { MappingStatus, PeriodStatus, SubmissionStatus } from '@prisma/client';
 
 // Labels only. Data keeps stable codes; these catalogs translate them.
 export const en = {
@@ -37,6 +37,42 @@ export const en = {
   } satisfies Record<SubmissionStatus, string>,
   periodStatus: { OPEN: 'Open', LOCKED: 'Locked' } satisfies Record<PeriodStatus, string>,
   language: { label: 'Language', en: 'English', es: 'Español' },
+  statements: {
+    title: 'Financial Statements',
+    bs: 'Balance Sheet', pl: 'Profit & Loss',
+    ytd: 'Year to date', month: 'Month',
+    basisLatest: 'Latest submissions', basisApproved: 'Approved only',
+    signsNatural: 'Natural signs', signsRaw: 'Databook signs (Dr +, Cr −)',
+    consolidated: 'Consolidated',
+    line: 'Line',
+    show: 'Show',
+    preliminary: 'Preliminary',
+    final: 'Final',
+    preliminaryWhy: 'Not final until every entity has an approved trial balance and every account mapping is approved.',
+    missingTb: (e: string) => `${e}: no trial balance for this period`,
+    unapproved: (e: string, status: string, v: number, n: number) => `${e}: TB v${v} ${status}; ${n} mappings awaiting approval`,
+    unmapped: (e: string, n: number) => `${e}: ${n} unmapped accounts excluded`,
+    outOfBalance: 'Out of balance (assets + liabilities & equity)',
+    monthNoPrior: 'Month view needs the prior month loaded; showing what is available.',
+    consolidatedHidden: 'Consolidated column is shown only to users with access to every entity.',
+    drillHint: 'Click a figure to see the accounts behind it.',
+    back: 'Back to statements',
+    stdAccount: 'Standard account',
+    account: 'Account',
+    entity: 'Entity',
+    balance: 'Balance',
+    mapping: 'Mapping',
+    total: 'Total',
+    ytdNote: 'Balances are cumulative period-end (year to date for P&L).',
+    accountHistory: 'Trial balance history',
+    period: 'Period', version: 'Version', status: 'Status', debit: 'Debit', credit: 'Credit',
+    source: 'Source file', imported: 'Imported',
+    mappingHistory: 'Mapping history', effectiveFrom: 'Effective from',
+    noLines: 'No accounts feed this line for the selection.',
+    nameSource: 'Name in source ledger',
+    portalCode: 'Portal-assigned code: no account number in the source',
+  },
+  mappingStatus: { PROPOSED: 'Proposed', APPROVED: 'Approved', REJECTED: 'Rejected' } satisfies Record<MappingStatus, string>,
 };
 
 export type Messages = typeof en;
