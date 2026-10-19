@@ -148,6 +148,7 @@ enum AuditAction {
   LOGIN_FAILED
   LOGOUT
   EXPORT
+  AI_QUERY
 }
 
 /// Append-only: the first migration installs a trigger that rejects UPDATE and DELETE.
