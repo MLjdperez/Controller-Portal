@@ -60,3 +60,11 @@ a.button:hover { border-color: var(--accent); }
 tr.memo-header td { font-weight: 600; padding-top: 24px; border-bottom: 1px solid var(--muted); color: var(--muted); }
 tr.memo td:first-child { padding-left: 24px; }
 tr.ratio td { font-style: italic; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions form { display: flex; gap: 6px; align-items: center; }
+.actions input, .bulk input { padding: 6px 8px; font-size: 13px; min-width: 220px; }
+.actions button, .bulk button { margin-top: 0; padding: 6px 12px; }
+button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--line); }
+.bulk { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+.error-notice { border-left-color: var(--bad); }
+.nav a .count { background: var(--accent); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 7px; }

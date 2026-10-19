@@ -379,6 +379,7 @@ model AccountMapping {
   effectiveFrom   DateTime      @db.Date
   status          MappingStatus @default(PROPOSED)
   reason          String?
+  rejectionReason String?
   preparedById    String?
   approvedById    String?
   approvedAt      DateTime?
@@ -492,6 +493,8 @@ model TbSubmission {
   approvedById      String?
   approvedAt        DateTime?
   rejectionReason   String?
+  /// Required when approving a TB that does not balance: the documented exception.
+  approvalNote      String?
   createdAt         DateTime          @default(now())
 
   entity       Entity           @relation(fields: [entityId], references: [id])

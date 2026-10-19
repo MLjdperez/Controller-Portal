@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { requirePermission } from '@/lib/auth';
+import { requirePagePermission } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { formatDate, formatMoney, messages } from '@/lib/i18n';
 import { parseParams, query, type RawParams } from '../../params';
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export default async function AccountDrill({ params, searchParams }: {
   params: Promise<{ id: string }>; searchParams: Promise<RawParams>;
 }) {
-  const s = await requirePermission('VIEW_TB');
+  const s = await requirePagePermission('VIEW_TB');
   const t = messages(s.locale);
   const ts = t.statements;
   const { id } = await params;

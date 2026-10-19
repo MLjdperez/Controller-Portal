@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { requirePermission } from '@/lib/auth';
+import { requirePagePermission } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { formatMoney, messages } from '@/lib/i18n';
 import { Decimal, ZERO, sum } from '@/lib/money';
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 /** A statement figure → the standard accounts and source accounts (TB lines) that make it up. Always YTD balances. */
 export default async function LineDrill({ searchParams }: { searchParams: Promise<RawParams> }) {
-  const s = await requirePermission('VIEW_STATEMENTS');
+  const s = await requirePagePermission('VIEW_STATEMENTS');
   const t = messages(s.locale);
   const ts = t.statements;
   const sp = await searchParams;

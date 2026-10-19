@@ -1,4 +1,4 @@
-import { requirePermission } from '@/lib/auth';
+import { requirePagePermission } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { messages } from '@/lib/i18n';
 
@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 /** Phase 1 dashboard: TB status by entity for one period. A missing TB says "missing", never 0. */
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
-  const s = await requirePermission('VIEW_TB');
+  const s = await requirePagePermission('VIEW_TB');
   const t = messages(s.locale);
   const { period: key } = await searchParams;
 

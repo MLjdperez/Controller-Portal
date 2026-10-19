@@ -2,6 +2,7 @@
 // cascade only when the grant says so (src/lib/scope.ts).
 import 'server-only';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import type { Locale, Permission, RoleCode } from '@prisma/client';
@@ -70,6 +71,17 @@ export class AuthError extends Error {
 export async function requireSession(): Promise<SessionUser> {
   const s = await getSession();
   if (!s) throw new AuthError('UNAUTHENTICATED');
+  return s;
+}
+
+/**
+ * For pages: a missing session goes to sign-in instead of throwing (the layout redirects too, but pages render
+ * in parallel with it). A missing permission still throws: that's a 403, not a sign-in problem.
+ */
+export async function requirePagePermission(permission?: Permission): Promise<SessionUser> {
+  const s = await getSession();
+  if (!s) redirect('/login');
+  if (permission && !s.permissions.has(permission)) throw new AuthError('FORBIDDEN', permission);
   return s;
 }
 

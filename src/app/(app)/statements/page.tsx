@@ -1,4 +1,4 @@
-import { requirePermission } from '@/lib/auth';
+import { requirePagePermission } from '@/lib/auth';
 import { formatMoney, messages } from '@/lib/i18n';
 import { EBITDA_DEFINITION } from '@/lib/statements/layout';
 import type { ViewRow } from '@/lib/statements/view';
@@ -12,7 +12,7 @@ const ROW_CLASS: Record<ViewRow['kind'], string> = {
 };
 
 export default async function StatementsPage({ searchParams }: { searchParams: Promise<RawParams> }) {
-  const s = await requirePermission('VIEW_STATEMENTS');
+  const s = await requirePagePermission('VIEW_STATEMENTS');
   const t = messages(s.locale);
   const ts = t.statements;
   const p = parseParams(await searchParams);
