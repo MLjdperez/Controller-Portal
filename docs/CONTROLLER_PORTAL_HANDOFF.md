@@ -15,8 +15,9 @@ Status legend: **[Verified]** seen in source data or vendor docs · **[Decision]
 |---|---|---|
 | D1 | FA / intangibles / leases hosting (§4) | **Option 2: the portal hosts all three subledgers.** Sage Fixed Assets is not purchased. Sage 100 stays the MLF GL of record and receives JEs from the portal. |
 | D2 | MLF FA opening basis (§5) | **Replicate the Databook.** The register's 12/31/2025 opening cost, accumulated depreciation and NBV must tie to the audited Databook/GL. The Excel schedule is not loaded as opening balances. Acceptance test: register = Databook by GL account. |
-| D3 | Ownership (§2) | **Every subsidiary is 100% owned** (MLF, MLL, GSA, LSA under MLB). No non-controlling interest. |
-| D4 | Functional currency (§2) | **LSA is the only non-USD entity; its functional currency is NIO.** GSA is USD. |
+| D3 | Ownership (§2) | **Every subsidiary is 100% owned.** Chain per master prompt §4: MLB → MLF → {MLL, GSA, LSA}. No non-controlling interest. Ownership is still stored effective-dated and approved. |
+| D4 | Functional currency (§2) | **LSA (Lunic SA, Nicaragua) is the only non-USD entity; its functional currency is NIO.** GSA is USD. |
+| D5 | Repo strategy | **Separate app and database** in this repo. Port the budget app's auth, audit log, upload pipeline and i18n; never modify the budget app from here. |
 | — | Still open | LSA translation method and rate source. Also: does the portal translate NIO itself, or take the Databook's LSA figures (which appear to be already in USD)? Phase 1 reproduces the Databook as-is, so this is not a blocker. |
 
 ## 1. Repository
