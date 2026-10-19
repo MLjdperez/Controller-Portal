@@ -1,0 +1,552 @@
+// Mama Lycha Group Controller Portal — Phase 1 schema (financial foundation).
+// Design: docs/PHASE0_PLAN.md. Decisions: docs/CONTROLLER_PORTAL_HANDOFF.md §0.
+//
+// Conventions
+// - Money is Decimal(20,6): LSA's translated balances carry sub-cent values and are kept as given.
+// - Signed balance = debit − credit. Debits are positive, as in the Databook.
+// - Status values are stable codes (enums). Labels live in src/messages.
+// - Nothing financial is updated in place: a corrected TB is a new version; a changed mapping is a new row.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Identity and access ─────────────────────────────
+
+enum Locale {
+  en
+  es
+}
+
+enum RoleCode {
+  CONTROLLER
+  CFO
+  COLLABORATOR
+  AUDITOR
+}
+
+/// Checked on the server for every protected action. Hiding a button is not the control.
+enum Permission {
+  ADMIN_USERS
+  ADMIN_ENTITIES
+  ADMIN_COA
+  APPROVE_MAPPING
+  VIEW_STATEMENTS
+  VIEW_TB
+  UPLOAD_TB
+  APPROVE_TB
+  VIEW_AUDIT_LOG
+  LOCK_PERIOD
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  passwordHash       String
+  fullName           String
+  locale             Locale    @default(en)
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  roles    UserRole[]
+  scopes   UserScope[]
+  sessions Session[]
+  audit    AuditLog[]
+
+  importBatches      ImportBatch[]    @relation("BatchUploader")
+  submissionsMade    TbSubmission[]   @relation("SubmissionPreparer")
+  submissionsOk      TbSubmission[]   @relation("SubmissionApprover")
+  mappingsMade       AccountMapping[] @relation("MappingPreparer")
+  mappingsOk         AccountMapping[] @relation("MappingApprover")
+  ownershipsApproved Ownership[]      @relation("OwnershipApprover")
+  periodsLocked      EntityPeriod[]   @relation("PeriodLocker")
+
+  @@index([isActive])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  code        RoleCode         @unique
+  nameEn      String
+  nameEs      String
+  permissions RolePermission[]
+  users       UserRole[]
+}
+
+model RolePermission {
+  roleId     String
+  permission Permission
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permission])
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+}
+
+/// An explicit entity grant. No grants means no entities — never "all".
+model UserScope {
+  id                 String   @id @default(cuid())
+  userId             String
+  entityId           String
+  /// A grant on a parent reaches its subsidiaries only when this is true.
+  includeDescendants Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity Entity @relation(fields: [entityId], references: [id])
+
+  @@unique([userId, entityId])
+}
+
+/// Tokens are stored hashed, so a leaked row is not a live session.
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ───────────────────────────── Audit trail ─────────────────────────────
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  SUBMIT
+  IMPORT
+  LOCK
+  UNLOCK
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+}
+
+/// Append-only: the first migration installs a trigger that rejects UPDATE and DELETE.
+model AuditLog {
+  id         String      @id @default(cuid())
+  at         DateTime    @default(now())
+  userId     String?
+  action     AuditAction
+  objectType String
+  objectId   String?
+  entityId   String?
+  summary    String
+  before     Json?
+  after      Json?
+  ipAddress  String?
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([at])
+  @@index([objectType, objectId])
+  @@index([entityId])
+}
+
+// ───────────────────────────── Group structure ─────────────────────────────
+
+enum EntityKind {
+  /// A company with its own books.
+  LEGAL
+  /// ELIM: exists only to carry consolidation adjustments.
+  CONSOLIDATION
+}
+
+enum SourceSystem {
+  PORTAL
+  SAGE100
+  QUICKBOOKS
+  EXCEL_TB
+}
+
+model Entity {
+  id                 String       @id @default(cuid())
+  /// Portal code: MLB, MLF, MLL, GSA, LSA, ELIM.
+  code               String       @unique
+  legalName          String
+  shortName          String
+  /// The "Entity" column value in the Databook tabs (e.g. "Mama Lycha"), used by the importer.
+  databookName       String?      @unique
+  kind               EntityKind   @default(LEGAL)
+  country            String
+  /// ISO 4217. LSA is NIO (handoff D4); everyone else USD.
+  functionalCurrency String       @default("USD")
+  sourceSystem       SourceSystem
+  sageCompanyCode    String?
+  parentId           String?
+  sortOrder          Int          @default(0)
+  isActive           Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+
+  parent   Entity?  @relation("EntityTree", fields: [parentId], references: [id])
+  children Entity[] @relation("EntityTree")
+
+  ownershipsHeld  Ownership[]     @relation("OwnershipParent")
+  ownershipsOwned Ownership[]     @relation("OwnershipChild")
+  periods         EntityPeriod[]
+  sourceAccounts  SourceAccount[]
+  icAccounts      SourceAccount[] @relation("IcCounterparty")
+  submissions     TbSubmission[]
+  importBatches   ImportBatch[]
+  scopes          UserScope[]
+
+  @@index([parentId])
+}
+
+/// Effective-dated and approved. Consolidation reads the row in force at period end.
+model Ownership {
+  id            String    @id @default(cuid())
+  parentId      String
+  childId       String
+  /// 0–100.
+  percent       Decimal   @db.Decimal(7, 4)
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  basis         String?
+  approvedById  String?
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  parent     Entity @relation("OwnershipParent", fields: [parentId], references: [id])
+  child      Entity @relation("OwnershipChild", fields: [childId], references: [id])
+  approvedBy User?  @relation("OwnershipApprover", fields: [approvedById], references: [id])
+
+  @@unique([childId, effectiveFrom])
+  @@index([parentId])
+}
+
+// ───────────────────────────── Calendar ─────────────────────────────
+
+enum PeriodStatus {
+  OPEN
+  LOCKED
+}
+
+/// Calendar months. Fiscal year = calendar year for every entity today.
+model AccountingPeriod {
+  id         String   @id @default(cuid())
+  fiscalYear Int
+  month      Int
+  startDate  DateTime @db.Date
+  endDate    DateTime @db.Date
+  /// "2026-09". Stable key used in URLs and imports.
+  key        String   @unique
+
+  entityPeriods EntityPeriod[]
+  submissions   TbSubmission[]
+  importBatches ImportBatch[]
+  rates         ExchangeRate[]
+
+  @@unique([fiscalYear, month])
+}
+
+model EntityPeriod {
+  id         String       @id @default(cuid())
+  entityId   String
+  periodId   String
+  status     PeriodStatus @default(OPEN)
+  lockedById String?
+  lockedAt   DateTime?
+
+  entity   Entity           @relation(fields: [entityId], references: [id])
+  period   AccountingPeriod @relation(fields: [periodId], references: [id])
+  lockedBy User?            @relation("PeriodLocker", fields: [lockedById], references: [id])
+
+  @@unique([entityId, periodId])
+}
+
+// ───────────────────────────── Chart of accounts ─────────────────────────────
+
+enum Statement {
+  BS
+  PL
+}
+
+enum LineKind {
+  /// Accounts map here (Databook L1 values: "Inventory", "Product sales", …).
+  DETAIL
+  /// Sum of the DETAIL lines in its range ("Total current assets", "Gross profit").
+  SUBTOTAL
+}
+
+/// The presentation lines of the BS and PL, in order. The Databook L1 column names the DETAIL lines.
+model StatementLine {
+  id        String    @id @default(cuid())
+  statement Statement
+  /// Stable code, e.g. "BS.INVENTORY", "PL.GROSS_PROFIT".
+  code      String    @unique
+  nameEn    String
+  nameEs    String?
+  kind      LineKind
+  sortOrder Int
+  /// For SUBTOTAL lines: the DETAIL/SUBTOTAL codes it adds up, in order.
+  sumOf     String[]
+
+  stdAccounts StdAccount[]
+
+  @@unique([statement, nameEn])
+  @@index([statement, sortOrder])
+}
+
+/// The group's standardized account: one Databook (L1, L2) pair.
+model StdAccount {
+  id              String  @id @default(cuid())
+  /// e.g. "BS.INVENTORY.RAW_MATERIALS".
+  code            String  @unique
+  nameEn          String
+  nameEs          String?
+  statementLineId String
+  isIntercompany  Boolean @default(false)
+  isActive        Boolean @default(true)
+
+  statementLine StatementLine    @relation(fields: [statementLineId], references: [id])
+  mappings      AccountMapping[]
+
+  @@index([statementLineId])
+}
+
+/// An account as the source ledger keeps it. Its number and names are never altered.
+model SourceAccount {
+  id               String    @id @default(cuid())
+  entityId         String
+  code             String
+  /// Name in the source ledger's own language ("Nombre").
+  nameSource       String
+  /// "TB Account Name English".
+  nameEn           String?
+  statement        Statement
+  /// Databook "BS Type" / "Account Type" (e.g. Assets / Current assets).
+  bsType           String?
+  accountType      String?
+  /// Databook L3: the finest group label, kept for drill-down.
+  groupLabel       String?
+  /// Set when the Databook IC column names a counterparty.
+  icCounterpartyId String?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+
+  entity         Entity           @relation(fields: [entityId], references: [id])
+  icCounterparty Entity?          @relation("IcCounterparty", fields: [icCounterpartyId], references: [id])
+  mappings       AccountMapping[]
+  tbLines        TbLine[]
+
+  @@unique([entityId, code])
+}
+
+enum MappingStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+}
+
+/// Versioned: a change is a new row with a later effectiveFrom, never an edit.
+model AccountMapping {
+  id              String        @id @default(cuid())
+  sourceAccountId String
+  stdAccountId    String
+  effectiveFrom   DateTime      @db.Date
+  status          MappingStatus @default(PROPOSED)
+  reason          String?
+  preparedById    String?
+  approvedById    String?
+  approvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+
+  sourceAccount SourceAccount @relation(fields: [sourceAccountId], references: [id])
+  stdAccount    StdAccount    @relation(fields: [stdAccountId], references: [id])
+  preparedBy    User?         @relation("MappingPreparer", fields: [preparedById], references: [id])
+  approvedBy    User?         @relation("MappingApprover", fields: [approvedById], references: [id])
+
+  @@unique([sourceAccountId, effectiveFrom])
+  @@index([stdAccountId])
+}
+
+// ───────────────────────────── Ingestion ─────────────────────────────
+
+enum ImportKind {
+  DATABOOK
+  TRIAL_BALANCE
+}
+
+enum ImportStatus {
+  RECEIVED
+  VALIDATED
+  FAILED
+  COMMITTED
+  DUPLICATE
+}
+
+/// One received file. The original is kept in storage under its SHA-256.
+model ImportBatch {
+  id           String       @id @default(cuid())
+  kind         ImportKind
+  sourceSystem SourceSystem
+  /// Null for a Databook import, which spans entities and periods.
+  entityId     String?
+  periodId     String?
+  fileName     String
+  sha256       String
+  sizeBytes    Int
+  storageKey   String
+  rowCount     Int          @default(0)
+  status       ImportStatus @default(RECEIVED)
+  uploadedById String?
+  createdAt    DateTime     @default(now())
+  committedAt  DateTime?
+
+  entity      Entity?           @relation(fields: [entityId], references: [id])
+  period      AccountingPeriod? @relation(fields: [periodId], references: [id])
+  uploadedBy  User?             @relation("BatchUploader", fields: [uploadedById], references: [id])
+  issues      ValidationIssue[]
+  submissions TbSubmission[]
+
+  @@index([sha256])
+  @@index([entityId, periodId])
+}
+
+enum IssueSeverity {
+  ERROR
+  WARNING
+}
+
+model ValidationIssue {
+  id        String        @id @default(cuid())
+  batchId   String
+  severity  IssueSeverity
+  /// Stable code, e.g. "TB_NOT_BALANCED", "UNMAPPED_ACCOUNT".
+  code      String
+  rowNumber Int?
+  field     String?
+  message   String
+  createdAt DateTime      @default(now())
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+}
+
+// ───────────────────────────── Trial balances ─────────────────────────────
+
+enum SubmissionStatus {
+  DRAFT
+  VALIDATED
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum TranslationSource {
+  /// Amounts are already in the reporting currency as delivered.
+  NONE
+  /// LSA in Phase 1: the Databook's USD figures, taken as given.
+  DATABOOK
+  /// Phase 2: translated by the portal from ExchangeRate.
+  PORTAL
+}
+
+/// One entity's trial balance for one period. A correction is version n+1; version n becomes SUPERSEDED.
+model TbSubmission {
+  id                String            @id @default(cuid())
+  entityId          String
+  periodId          String
+  version           Int
+  status            SubmissionStatus  @default(DRAFT)
+  batchId           String
+  currency          String
+  reportingCurrency String            @default("USD")
+  translationSource TranslationSource @default(NONE)
+  supersedesId      String?           @unique
+  preparedById      String?
+  approvedById      String?
+  approvedAt        DateTime?
+  rejectionReason   String?
+  createdAt         DateTime          @default(now())
+
+  entity       Entity           @relation(fields: [entityId], references: [id])
+  period       AccountingPeriod @relation(fields: [periodId], references: [id])
+  batch        ImportBatch      @relation(fields: [batchId], references: [id])
+  supersedes   TbSubmission?    @relation("Supersedes", fields: [supersedesId], references: [id])
+  supersededBy TbSubmission?    @relation("Supersedes")
+  preparedBy   User?            @relation("SubmissionPreparer", fields: [preparedById], references: [id])
+  approvedBy   User?            @relation("SubmissionApprover", fields: [approvedById], references: [id])
+  lines        TbLine[]
+
+  // At most one APPROVED per entity and period: partial unique index in the migration.
+  @@unique([entityId, periodId, version])
+  @@index([periodId, status])
+}
+
+/// A cumulative period-end balance, as the source reports it. Activity is derived, never stored.
+model TbLine {
+  id               String    @id @default(cuid())
+  submissionId     String
+  sourceAccountId  String
+  rowNumber        Int?
+  debit            Decimal   @default(0) @db.Decimal(20, 6)
+  credit           Decimal   @default(0) @db.Decimal(20, 6)
+  /// debit − credit, in the submission currency.
+  balance          Decimal   @db.Decimal(20, 6)
+  /// In reporting currency. Equals balance when no translation applies.
+  reportingBalance Decimal   @db.Decimal(20, 6)
+  rate             Decimal?  @db.Decimal(18, 8)
+  rateType         RateType?
+
+  submission    TbSubmission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  sourceAccount SourceAccount @relation(fields: [sourceAccountId], references: [id])
+
+  @@unique([submissionId, sourceAccountId])
+  @@index([sourceAccountId])
+}
+
+// ───────────────────────────── FX (table now, engine in Phase 2) ─────────────────────────────
+
+enum RateType {
+  CLOSING
+  AVERAGE
+  HISTORICAL
+}
+
+model ExchangeRate {
+  id           String    @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  periodId     String
+  rateType     RateType
+  rate         Decimal   @db.Decimal(18, 8)
+  rateDate     DateTime  @db.Date
+  /// e.g. "Banco Central de Nicaragua".
+  source       String
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  period AccountingPeriod @relation(fields: [periodId], references: [id])
+
+  @@unique([fromCurrency, toCurrency, periodId, rateType])
+}

@@ -1,0 +1,23 @@
+node_modules/
+.next/
+.env
+.env.local
+*.log
+next-env.d.ts
+tsconfig.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# Financial source data never goes to GitHub. Synthetic fixtures only, under test/fixtures.
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+!test/fixtures/**
+!prisma/reference/**/*.csv
+
+# Original uploaded files (local dev storage)
+/storage/
+
+# Initial passwords written by the seed. Distribute, then delete.
+credentials.local.csv
