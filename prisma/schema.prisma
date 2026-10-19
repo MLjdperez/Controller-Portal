@@ -474,6 +474,8 @@ enum TranslationSource {
   NONE
   /// LSA in Phase 1: the Databook's USD figures, taken as given.
   DATABOOK
+  /// The uploaded file carried both currencies (e.g. Lunic: NIO and a USD column at the month-end spot rate).
+  SOURCE_FILE
   /// Phase 2: translated by the portal from ExchangeRate.
   PORTAL
 }

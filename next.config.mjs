@@ -2,6 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Trial balance uploads go through a server action; the parser also caps files at 10 MB.
+  experimental: { serverActions: { bodySizeLimit: '11mb' } },
   async headers() {
     return [{
       source: '/:path*',

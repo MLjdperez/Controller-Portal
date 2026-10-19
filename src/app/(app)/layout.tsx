@@ -11,7 +11,7 @@ const NAV = [
   { key: 'dashboard', href: '/', phase: 1 },
   { key: 'statements', href: '/statements', phase: 1 },
   { key: 'ask', href: '/ask', phase: 1, permission: 'VIEW_STATEMENTS' },
-  { key: 'trialBalances', phase: 1 },
+  { key: 'trialBalances', href: '/trial-balances', phase: 1, permission: 'VIEW_TB' },
   { key: 'consolidation', phase: 2 },
   { key: 'journalEntries', phase: 2 },
   { key: 'close', phase: 3 },

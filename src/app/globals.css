@@ -72,3 +72,9 @@ button.secondary { background: var(--surface); color: var(--text); border: 1px s
 .answer { margin-top: 20px; max-width: 900px; }
 .examples { display: flex; flex-wrap: wrap; gap: 8px; }
 .examples button { margin-top: 0; text-align: left; font-size: 13px; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.issues { padding-left: 18px; font-size: 14px; }
+.issues li { margin: 4px 0; }
+.issues li.bad { color: var(--bad); }
