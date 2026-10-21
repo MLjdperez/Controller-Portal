@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { formatDate, messages } from '@/lib/i18n';
 import { CreateUserForm } from './create-form';
 import { setActiveAction } from './actions';
+import { AdminTabs } from '../admin-tabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,7 @@ export default async function UsersPage() {
 
   return (
     <>
+      <AdminTabs s={s} t={t} active="users" />
       <h2 style={{ margin: '0 0 16px', fontSize: 20 }}>{tu.title}</h2>
       <div className="scroll">
         <table>

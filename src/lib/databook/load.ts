@@ -38,6 +38,8 @@ export async function loadDatabook(db: PrismaClient, args: {
   parsed: ParsedDatabook;
   file: { name: string; sha256: string; sizeBytes: number; storageKey: string };
   userId: string;
+  /** An upload batch already recorded (with its issues) by the import page; the load completes it instead of creating one. */
+  batchId?: string;
 }): Promise<LoadSummary> {
   const { parsed, file, userId } = args;
   const errors = parsed.issues.filter(i => i.severity === 'ERROR');
@@ -45,10 +47,12 @@ export async function loadDatabook(db: PrismaClient, args: {
 
   const committed = await db.importBatch.findFirst({ where: { sha256: file.sha256, kind: 'DATABOOK', status: 'COMMITTED' } });
   if (committed) {
-    const dup = await db.importBatch.create({
-      data: { kind: 'DATABOOK', sourceSystem: 'EXCEL_TB', fileName: file.name, sha256: file.sha256, sizeBytes: file.sizeBytes,
-        storageKey: file.storageKey, status: 'DUPLICATE', uploadedById: userId },
-    });
+    const dup = args.batchId
+      ? await db.importBatch.update({ where: { id: args.batchId }, data: { status: 'DUPLICATE' } })
+      : await db.importBatch.create({
+        data: { kind: 'DATABOOK', sourceSystem: 'EXCEL_TB', fileName: file.name, sha256: file.sha256, sizeBytes: file.sizeBytes,
+          storageKey: file.storageKey, status: 'DUPLICATE', uploadedById: userId },
+      });
     await audit(db, { userId, action: 'IMPORT', objectType: 'ImportBatch', objectId: dup.id,
       summary: `Databook ${file.name} already committed as ${committed.id}; nothing loaded` });
     return { batchId: dup.id, status: 'DUPLICATE', statementLines: 0, stdAccounts: 0, sourceAccountsCreated: 0,
@@ -60,12 +64,14 @@ export async function loadDatabook(db: PrismaClient, args: {
       sourceAccountsCreated: 0, mappingsProposed: 0, submissionsCreated: 0, submissionsUnchanged: 0 };
 
     const rowCount = parsed.entities.reduce((n, e) => n + e.accounts.length, 0);
-    const batch = await tx.importBatch.create({
-      data: { kind: 'DATABOOK', sourceSystem: 'EXCEL_TB', fileName: file.name, sha256: file.sha256, sizeBytes: file.sizeBytes,
-        storageKey: file.storageKey, rowCount, status: 'VALIDATED', uploadedById: userId },
-    });
+    const batch = args.batchId
+      ? await tx.importBatch.update({ where: { id: args.batchId }, data: { rowCount } })
+      : await tx.importBatch.create({
+        data: { kind: 'DATABOOK', sourceSystem: 'EXCEL_TB', fileName: file.name, sha256: file.sha256, sizeBytes: file.sizeBytes,
+          storageKey: file.storageKey, rowCount, status: 'VALIDATED', uploadedById: userId },
+      });
     s.batchId = batch.id;
-    if (parsed.issues.length)
+    if (parsed.issues.length && !args.batchId)
       await tx.validationIssue.createMany({ data: parsed.issues.map(i => ({
         batchId: batch.id, severity: i.severity, code: i.code, rowNumber: i.row ?? null, field: i.tab, message: i.message })) });
 
