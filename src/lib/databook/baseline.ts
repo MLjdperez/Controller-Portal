@@ -11,6 +11,7 @@ import { Decimal, amount } from '../money';
 import { ENTITIES } from '../reference';
 import { ALL_LINES, normalizeLabel } from '../statements/layout';
 import { readNumber } from './parse';
+import { CONSOLIDATED } from '../statements/engine';
 
 export type BaselineValue = {
   source: string;
@@ -91,7 +92,9 @@ export function readBaseline(wb: Workbook): BaselineValue[] {
     const ws = wb.getWorksheet(tab);
     if (!ws) continue;
     const selected = ws.getCell('B5').value;
-    const entity = typeof selected === 'string' ? entityByName.get(normalizeLabel(selected)) : undefined;
+    // "*" is SUMIFS's wildcard: every entity tab including Elim, i.e. the consolidated group.
+    const entity = typeof selected !== 'string' ? undefined
+      : selected.trim() === '*' ? CONSOLIDATED : entityByName.get(normalizeLabel(selected));
     if (!entity) continue;
     ws.getRow(8).eachCell((cell, col) => {
       const v = cell.value as unknown;

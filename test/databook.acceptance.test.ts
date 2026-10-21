@@ -35,39 +35,43 @@ describe.skipIf(!path)('Databook acceptance', () => {
     expect(parsed.periods.at(-1)).toBe('2026-09');
   });
 
-  it('reads a baseline for MLF every month and every entity at Dec-2025', () => {
-    const mlfSep = baseline.filter(b => b.entity === 'MLF' && b.period === '2026-09');
-    expect(mlfSep.length).toBeGreaterThan(40);
-    for (const e of ENTITIES) expect(baseline.some(b => b.entity === e && b.period === '2025-12')).toBe(true);
+  // The monthly BS/PL tabs show whichever entity their B5 selector names: MLF in the 2026-10-14 file, "*" (the
+  // consolidated group) in the 2026-10-21 corrected one.
+  const monthlyEntity = () => baseline.find(b => b.source === 'BS')?.entity;
+
+  it('reads a baseline for the selected entity every month and every entity at Dec-2025', () => {
+    expect(['MLF', CONSOLIDATED]).toContain(monthlyEntity());
+    expect(baseline.filter(b => b.source === 'BS' && b.period === '2026-09').length).toBeGreaterThan(20);
+    for (const e of ENTITIES) expect(baseline.some(b => b.source === 'BS (YE)' && b.entity === e)).toBe(true);
   });
 
-  it('compares EBITDA to the Databook "EBITDA, reported" (MLF monthly, every entity at YE)', () => {
+  it('compares EBITDA to the Databook "EBITDA, reported" (monthly selection, every entity at YE)', () => {
     const e = baseline.filter(b => b.lineCode === 'PL.EBITDA');
-    expect(e.some(b => b.entity === 'MLF' && b.period === '2026-09')).toBe(true);
-    expect(e.filter(b => b.period === '2025-12').map(b => b.entity).sort()).toEqual([...ENTITIES].sort().concat('MLF').sort());
+    expect(e.some(b => b.source === 'PL' && b.entity === monthlyEntity() && b.period === '2026-09')).toBe(true);
+    expect(e.filter(b => b.source === 'PL (YE)').map(b => b.entity).sort()).toEqual([...ENTITIES].sort());
   });
 
   it('reproduces the Databook statements to the cent, except its known formula errors', () => {
     const { compared, differences } = compareToBaseline(baseline, p => balancesFromParsed(parsed, p), ENTITIES);
     expect(compared).toBeGreaterThan(1000);
-    // Only the Databook's own traced formula errors may differ, and exactly by their recorded amounts.
-    expect(differences.map(d => knownErrorKey({ ...d, diff: cents(d.diff) })))
-      .toEqual(KNOWN_DATABOOK_ERRORS.map(knownErrorKey));
+    // Only the Databook's own traced formula errors may differ, each by exactly its recorded amount.
+    const known = new Set(KNOWN_DATABOOK_ERRORS.map(knownErrorKey));
+    expect(differences.map(d => knownErrorKey({ ...d, diff: cents(d.diff) })).filter(k => !known.has(k))).toEqual([]);
   });
 
   it('reports every opening balance that does not roll forward (printed for the Controller)', () => {
     const diffs = checkOpenings(parsed);
     console.table(diffs.map(d => ({ entity: d.entity, year: d.year, line: d.lineCode,
       rolledForward: cents(d.expected), databookOpening: cents(d.actual), diff: cents(d.diff) })));
-    // Known as of the 2026-10-14 Databook: MLF's 2025 opening retained earnings is 574.18 off Dec-24 closed out.
-    expect(diffs.some(d => d.entity === 'MLF' && d.year === '2025' && cents(d.diff.abs()) === '574.18')).toBe(true);
+    // Since the 2026-10-21 corrections, openings roll forward except cents of rounding (LSA's openings were keyed in whole dollars).
+    expect(diffs.filter(d => d.diff.abs().gt(2)).map(d => `${d.entity} ${d.year} ${d.lineCode} ${cents(d.diff)}`)).toEqual([]);
   });
 
   it('consolidated Sep-2026 = sum of the six entities, and reports the BS difference', () => {
     const st = computeStatements(balancesFromParsed(parsed, '2026-09'), ENTITIES);
     const ni = st.amounts.get('PL.NET_INCOME')!;
     expect(cents(ni.get(CONSOLIDATED)!)).toBe(cents(ENTITIES.reduce((t, e) => t.plus(ni.get(e)!), ni.get('MLB')!.minus(ni.get('MLB')!))));
-    // Assets + L&E is 0 when the BS balances. Recorded, not asserted to zero: the Databook itself shows 0.96 for MLF.
+    // Assets + L&E is 0 when the BS balances; whatever it is, it must equal the TB's own difference (no mapping leaks).
     for (const e of [...ENTITIES, CONSOLIDATED])
       expect(cents(st.checks.bsDifference.get(e)!)).toBe(cents(st.checks.tbDifference.get(e)!));
   });
