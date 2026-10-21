@@ -3,16 +3,9 @@
 
 export type KnownError = { source: string; entity: string; period: string; lineCode: string; diff: string; why: string };
 
-// The 2026-10-21 corrected Databook made row 52 subtract interest in every column (=-D44 filled across), so MLF's
-// year-end EBITDA, which used to tie, is now off too. The intended fix is =+D44 across D52:I52.
-export const KNOWN_DATABOOK_ERRORS: readonly KnownError[] = [
-  { source: 'PL (YE)', entity: 'MLF', period: '2025-12', lineCode: 'PL.EBITDA', diff: '-7535163.40',
-    why: "'PL (YE)'!E52 subtracts interest (=-E44) instead of adding it back (since the 2026-10-21 correction)" },
-  { source: 'PL (YE)', entity: 'GSA', period: '2025-12', lineCode: 'PL.EBITDA', diff: '-37829.64',
-    why: "'PL (YE)'!G52 subtracts interest (=-G44) instead of adding it back" },
-  { source: 'PL (YE)', entity: 'ELIM', period: '2025-12', lineCode: 'PL.EBITDA', diff: '37857.28',
-    why: "'PL (YE)'!I52 subtracts interest (=-I44) instead of adding it back" },
-];
+// None open. History: PL (YE) row 52 subtracted interest in the EBITDA reconciliation (GSA and ELIM, then every column);
+// fixed in the Databook saved 2026-10-21 14:48 (=+D44 across D52:I52). Since then every compared figure ties.
+export const KNOWN_DATABOOK_ERRORS: readonly KnownError[] = [];
 
 export const knownErrorKey = (d: { source: string; entity: string; period: string; lineCode: string; diff: string }) =>
   `${d.source} ${d.entity} ${d.period} ${d.lineCode}: portal − databook ${d.diff}`;
